@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ตารางเวรแก้กระแสไฟฟ้าขัดข้อง กฟส.ชยน.</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sarabun', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.3); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    const { useState, useMemo, useCallback, useRef } = React;
+
+const EMPLOYEES = [
+  { id: "408876", nickname: "บัญชา",    fullname: "บัญชา วิวรรณพงษ์",    position: "พชง.6", phone: "095-816-8291", role: "หัวหน้าเวร" },
+  { id: "503452", nickname: "วัฒนะ",    fullname: "วัฒนะ วงศ์ชมภู",       position: "พชง.6", phone: "085-850-6719", role: "หัวหน้าเวร" },
+  { id: "512124", nickname: "ยุรนันท์", fullname: "ยุรนันท์ พิมพ์พัฒน์",  position: "พชง.4", phone: "097-335-6193", role: "หัวหน้าเวร" },
+  { id: "506194", nickname: "กฤษ",      fullname: "กฤษ บุญภาย",           position: "พชง.6", phone: "062-262-8999", role: "หัวหน้าเวร" },
+  { id: "513836", nickname: "ธราดล",    fullname: "ธราดล นันทร์แก้ว",     position: "พชง.3", phone: "095-207-1311", role: "พนักงานเวร" },
+  { id: "512682", nickname: "ธนารักษ์", fullname: "ธนารักษ์ เล็กประเสริฐ",position: "พชง.4", phone: "093-327-2955", role: "พนักงานเวร" },
+  { id: "513845", nickname: "ธนพรรชน์", fullname: "ธนพรรชน์ กลีบฉวี",    position: "พชง.3", phone: "099-016-1125", role: "พนักงานเวร" },
+  { id: "513837", nickname: "กษิดิศ",   fullname: "กษิดิศ จันทร์เสละ",   position: "พชง.3", phone: "098-130-4010", role: "พนักงานเวร" },
+];
+
+const INSPECTORS = [
+  { id: "475718", nickname: "ทรงคุณ", fullname: "ทรงคุณ ทุมวัน",  position: "หผ.บต.", phone: "081-321-3821" },
+  { id: "497367", nickname: "สรชา",   fullname: "สรชา แสงอารมณ์", position: "ชผ.ปร.", phone: "098-645-9452" },
+  { id: "437095", nickname: "ธงชัย",  fullname: "ธงชัย ตาลดง",    position: "หผ.ปร.", phone: "081-059-5073" },
+];
+
+const ELECTRICAL_WORKERS = [
+  { id: "A00001", fullname: "มงคลชัย ทดคุย",      position: "ผู้ปฏิบัติงานด้านระบบไฟฟ้า" },
+  { id: "A00002", fullname: "จรูญ จันทะอุทัย",    position: "ผู้ปฏิบัติงานด้านระบบไฟฟ้า" },
+  { id: "A00003", fullname: "ศตวรรษ พิลุน",       position: "ผู้ปฏิบัติงานด้านระบบไฟฟ้า" },
+  { id: "A00004", fullname: "สุนทร สะตะ",         position: "ผู้ปฏิบัติงานด้านระบบไฟฟ้า" },
+  { id: "A00005", fullname: "ธีรพงษ์ เนื่องแก้ว", position: "ผู้ปฏิบัติงานด้านระบบไฟฟ้า" },
+];
+
+const INITIAL_SCHEDULE = [
+  // Image 2 (updated/handwritten) takes priority over Image 1
+  // Day 1: 00.30=ธนารักษ์  08.30=วัฒนะ,ธราดล  16.30=กฤษ,ธนพรรชน์  standby=ยุรนันท์  note=อาทิตย์  insp=ธงชัย
+  { day:1,  shift0030:["ธนารักษ์"],    shift0830:["วัฒนะ","ธราดล"],       shift1630:["กฤษ","ธนพรรชน์"],     standby:"ยุรนันท์", note:"อาทิตย์", inspector:"ธงชัย" },
+  // Day 2: 00.30=ธนพรรชน์  16.30=ยุรนันท์,กษิดิศ  standby=กฤษ  insp=สรชา
+  { day:2,  shift0030:["ธนพรรชน์"],    shift0830:[],                       shift1630:["ยุรนันท์","กษิดิศ"],   standby:"กฤษ",      note:"",         inspector:"สรชา"  },
+  // Day 3: 00.30=กษิดิศ  08.30=ยุรนันท์,ธนารักษ์  16.30=กฤษ,ธราดล  standby=ยุรนันท์  note=หยุด  insp=ธงชัย
+  { day:3,  shift0030:["กษิดิศ"],      shift0830:["ยุรนันท์","ธนารักษ์"],  shift1630:["กฤษ","ธราดล"],         standby:"ยุรนันท์", note:"หยุด",     inspector:"ธงชัย" },
+  // Day 4: 00.30=ธราดล  16.30=ยุรนันท์,ธนพรรชน์  standby=กฤษ  insp=สรชา
+  { day:4,  shift0030:["ธราดล"],       shift0830:[],                       shift1630:["ยุรนันท์","ธนพรรชน์"],  standby:"กฤษ",      note:"",         inspector:"สรชา"  },
+  // Day 5: 00.30=ธนพรรชน์  16.30=วัฒนะ,กษิดิศ  standby=ยุรนันท์  insp=ธงชัย
+  { day:5,  shift0030:["ธนพรรชน์"],    shift0830:[],                       shift1630:["วัฒนะ","กษิดิศ"],      standby:"ยุรนันท์", note:"",         inspector:"ธงชัย" },
+  // Day 6: 00.30=กษิดิศ  08.30=วัฒนะ(handwritten img2)  16.30=กฤษ,ธนารักษ์  standby=วัฒนะ  insp=สรชา
+  { day:6,  shift0030:["กษิดิศ"],      shift0830:["วัฒนะ"],                shift1630:["กฤษ","ธนารักษ์"],      standby:"วัฒนะ",    note:"",         inspector:"สรชา"  },
+  // Day 7: 00.30=ธนารักษ์  08.30=ยุรนันท์,ธราดล  16.30=วัฒนะ,ธนพรรชน์  standby=กฤษ  note=เสาร์  insp=ธงชัย
+  { day:7,  shift0030:["ธนารักษ์"],    shift0830:["ยุรนันท์","ธราดล"],     shift1630:["วัฒนะ","ธนพรรชน์"],    standby:"กฤษ",      note:"เสาร์",    inspector:"ธงชัย" },
+  // Day 8: 00.30=ธนพรรชน์  08.30=กฤษ,กษิดิศ  16.30=ยุรนันท์,ธนารักษ์  standby=วัฒนะ  note=อาทิตย์  insp=สรชา
+  { day:8,  shift0030:["ธนพรรชน์"],    shift0830:["กฤษ","กษิดิศ"],         shift1630:["ยุรนันท์","ธนารักษ์"],  standby:"วัฒนะ",    note:"อาทิตย์",  inspector:"สรชา"  },
+  // Day 9: 00.30=ธนารักษ์  08.30=ยุรนันท์(handwritten img2 crossed กฤษ→ยุรนันท์)  16.30=วัฒนะ,ธราดล  standby=ยุรนันท์  insp=ธงชัย
+  { day:9,  shift0030:["ธนารักษ์"],    shift0830:["ยุรนันท์"],              shift1630:["วัฒนะ","ธราดล"],        standby:"ยุรนันท์", note:"",         inspector:"ธงชัย" },
+  // Day 10: 00.30=ธราดล  16.30=กฤษ,ธนพรรชน์  standby=วัฒนะ  insp=สรชา
+  { day:10, shift0030:["ธราดล"],       shift0830:[],                       shift1630:["กฤษ","ธนพรรชน์"],       standby:"วัฒนะ",    note:"",         inspector:"สรชา"  },
+  // Day 11: 00.30=ธนพรรชน์  16.30=ยุรนันท์,กษิดิศ  standby=กฤษ  insp=ธงชัย  (img2: วัฒนะ crossed out)
+  { day:11, shift0030:["ธนพรรชน์"],    shift0830:[],                       shift1630:["ยุรนันท์","กษิดิศ"],    standby:"กฤษ",      note:"",         inspector:"ธงชัย" },
+  // Day 12: 00.30=กษิดิศ  08.30=ยุรนันท์(handwritten img2)  16.30=วัฒนะ,ธนารักษ์  standby=ยุรนันท์  insp=สรชา
+  { day:12, shift0030:["กษิดิศ"],      shift0830:["ยุรนันท์"],              shift1630:["วัฒนะ","ธนารักษ์"],     standby:"ยุรนันท์", note:"",         inspector:"สรชา"  },
+  // Day 13: 00.30=ธนารักษ์  16.30=กฤษ,ธราดล  standby=วัฒนะ  insp=ธงชัย
+  { day:13, shift0030:["ธนารักษ์"],    shift0830:[],                       shift1630:["กฤษ","ธราดล"],           standby:"วัฒนะ",    note:"",         inspector:"ธงชัย" },
+  // Day 14: 00.30=ธราดล  08.30=กฤษ(handwritten img2)  16.30=วัฒนะ,กษิดิศ  standby=กฤษ  note=เสาร์  insp=สรชา
+  { day:14, shift0030:["ธราดล"],       shift0830:["กฤษ"],                   shift1630:["วัฒนะ","กษิดิศ"],       standby:"กฤษ",      note:"เสาร์",    inspector:"สรชา"  },
+  // Day 15: 00.30=กษิดิศ  08.30=ยุรนันท์,ธนพรรชน์  16.30=วัฒนะ,ธนารักษ์  standby=วัฒนะ  note=อาทิตย์  insp=ธงชัย
+  { day:15, shift0030:["กษิดิศ"],      shift0830:["ยุรนันท์","ธนพรรชน์"],  shift1630:["วัฒนะ","ธนารักษ์"],     standby:"วัฒนะ",    note:"อาทิตย์",  inspector:"ธงชัย" },
+  // Day 16: 00.30=ธราดล  08.30=กฤษ,ธนารักษ์  16.30=ยุรนันท์,ธราดล  standby=ยุรนันท์  insp=สรชา
+  { day:16, shift0030:["ธราดล"],       shift0830:["กฤษ","ธนารักษ์"],        shift1630:["ยุรนันท์","ธราดล"],     standby:"ยุรนันท์", note:"",         inspector:"สรชา"  },
+  // Day 17: 00.30=ธนพรรชน์  16.30=วัฒนะ,ธนพรรชน์  standby=วัฒนะ  insp=ธงชัย
+  { day:17, shift0030:["ธนพรรชน์"],    shift0830:[],                       shift1630:["วัฒนะ","ธนพรรชน์"],      standby:"วัฒนะ",    note:"",         inspector:"ธงชัย" },
+  // Day 18: 00.30=กษิดิศ  08.30=ยุรนันท์(handwritten img2)  16.30=กฤษ,กษิดิศ  standby=กฤษ  insp=สรชา
+  { day:18, shift0030:["กษิดิศ"],      shift0830:["ยุรนันท์"],              shift1630:["กฤษ","กษิดิศ"],          standby:"กฤษ",      note:"",         inspector:"สรชา"  },
+  // Day 19: 00.30=ธนารักษ์  16.30=ยุรนันท์,ธนารักษ์  standby=ยุรนันท์  insp=ธงชัย
+  { day:19, shift0030:["ธนารักษ์"],    shift0830:[],                       shift1630:["ยุรนันท์","ธนารักษ์"],   standby:"ยุรนันท์", note:"",         inspector:"ธงชัย" },
+  // Day 20: 00.30=ธราดล  16.30=กฤษ,ธนพรรชน์  standby=วัฒนะ  insp=สรชา
+  { day:20, shift0030:["ธราดล"],       shift0830:[],                       shift1630:["กฤษ","ธนพรรชน์"],        standby:"วัฒนะ",    note:"",         inspector:"สรชา"  },
+  // Day 21: 00.30=ธนพรรชน์  08.30=ยุรนันท์,ธนารักษ์  16.30=วัฒนะ,กษิดิศ  standby=กฤษ  note=เสาร์  insp=ธงชัย
+  { day:21, shift0030:["ธนพรรชน์"],    shift0830:["ยุรนันท์","ธนารักษ์"],  shift1630:["วัฒนะ","กษิดิศ"],       standby:"กฤษ",      note:"เสาร์",    inspector:"ธงชัย" },
+  // Day 22: 00.30=ธนารักษ์  08.30=กฤษ,ธราดล  16.30=ยุรนันท์,ธนพรรชน์  standby=วัฒนะ  note=อาทิตย์  insp=สรชา
+  { day:22, shift0030:["ธนารักษ์"],    shift0830:["กฤษ","ธราดล"],          shift1630:["ยุรนันท์","ธนพรรชน์"],  standby:"วัฒนะ",    note:"อาทิตย์",  inspector:"สรชา"  },
+  // Day 23: 00.30=ธนพรรชน์  16.30=วัฒนะ,กษิดิศ  standby=ยุรนันท์  insp=ธงชัย
+  { day:23, shift0030:["ธนพรรชน์"],    shift0830:[],                       shift1630:["วัฒนะ","กษิดิศ"],        standby:"ยุรนันท์", note:"",         inspector:"ธงชัย" },
+  // Day 24: 00.30=กษิดิศ  16.30=กฤษ,ธนารักษ์  standby=วัฒนะ  insp=สรชา
+  { day:24, shift0030:["กษิดิศ"],      shift0830:[],                       shift1630:["กฤษ","ธนารักษ์"],        standby:"วัฒนะ",    note:"",         inspector:"สรชา"  },
+  // Day 25: 00.30=ธนารักษ์  16.30=ยุรนันท์,ธราดล  standby=กฤษ  insp=ธงชัย
+  { day:25, shift0030:["ธนารักษ์"],    shift0830:[],                       shift1630:["ยุรนันท์","ธราดล"],      standby:"กฤษ",      note:"",         inspector:"ธงชัย" },
+  // Day 26: 00.30=ธราดล  16.30=วัฒนะ,ธนพรรชน์  standby=ยุรนันท์  insp=สรชา
+  { day:26, shift0030:["ธราดล"],       shift0830:[],                       shift1630:["วัฒนะ","ธนพรรชน์"],      standby:"ยุรนันท์", note:"",         inspector:"สรชา"  },
+  // Day 27: 00.30=ธนพรรชน์  16.30=กฤษ,กษิดิศ  standby=วัฒนะ  insp=ธงชัย
+  { day:27, shift0030:["ธนพรรชน์"],    shift0830:[],                       shift1630:["กฤษ","กษิดิศ"],          standby:"วัฒนะ",    note:"",         inspector:"ธงชัย" },
+  // Day 28: 00.30=กษิดิศ  08.30=ยุรนันท์,ธนารักษ์  16.30=วัฒนะ,ธราดล  standby=กฤษ  note=เสาร์  insp=สรชา
+  { day:28, shift0030:["กษิดิศ"],      shift0830:["ยุรนันท์","ธนารักษ์"],  shift1630:["วัฒนะ","ธราดล"],         standby:"กฤษ",      note:"เสาร์",    inspector:"สรชา"  },
+  // Day 29: 00.30=ธราดล  08.30=กฤษ,ธนพรรชน์  16.30=ยุรนันท์,กษิดิศ  standby=วัฒนะ  note=อาทิตย์  insp=ธงชัย
+  { day:29, shift0030:["ธราดล"],       shift0830:["กฤษ","ธนพรรชน์"],       shift1630:["ยุรนันท์","กษิดิศ"],    standby:"วัฒนะ",    note:"อาทิตย์",  inspector:"ธงชัย" },
+  // Day 30: 00.30=กษิดิศ  16.30=วัฒนะ,ธนารักษ์  standby=ยุรนันท์  insp=สรชา
+  { day:30, shift0030:["กษิดิศ"],      shift0830:[],                       shift1630:["วัฒนะ","ธนารักษ์"],      standby:"ยุรนันท์", note:"",         inspector:"สรชา"  },
+  // Day 31: 00.30=ธนารักษ์  16.30=กฤษ,ธราดล  standby=วัฒนะ  insp=ธงชัย
+  { day:31, shift0030:["ธนารักษ์"],    shift0830:[],                       shift1630:["กฤษ","ธราดล"],           standby:"วัฒนะ",    note:"",         inspector:"ธงชัย" },
+];
+
+const SHIFT_KEYS   = ["shift0030","shift0830","shift1630"];
+const SHIFT_LABELS = { shift0030:"00.30-08.30 น.", shift0830:"08.30-16.30 น.", shift1630:"16.30-00.30 น." };
+const SHIFT_SHORT  = { shift0030:"00.30-08.30",    shift0830:"08.30-16.30",    shift1630:"16.30-00.30"    };
+
+const getEmp  = (nick) => EMPLOYEES.find(e => e.nickname === nick);
+const getInsp = (nick) => INSPECTORS.find(e => e.nickname === nick);
+const fmtDate = (day)  => `${String(day).padStart(2,"0")}/03/2569`;
+
+/* ─────────────────── Overlay wrapper ─────────────────── */
+function Overlay({ children, onClose }) {
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(0,15,50,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:700,maxHeight:"92vh",overflowY:"auto",position:"relative",border:"2px solid #1a3a6b",boxShadow:"0 24px 80px rgba(0,0,0,0.6)"}}>
+        <button onClick={onClose} style={{position:"absolute",top:12,right:16,fontSize:24,fontWeight:700,color:"#aaa",background:"none",border:"none",cursor:"pointer",lineHeight:1,zIndex:2}}>×</button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Nick badge ─────────────────── */
+function NickBadge({ nick, isHead, small }) {
+  return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:2,
+      padding: small ? "1px 6px" : "2px 8px",
+      borderRadius:99, fontSize: small ? 10 : 11,
+      fontFamily:"Sarabun,sans-serif", fontWeight: isHead ? 700 : 500,
+      background: isHead ? "#1a3a6b" : "#e8f0fb",
+      color:      isHead ? "#FFD700" : "#1a3a6b",
+      border:     isHead ? "none"    : "1px solid #b0c8e8",
+      whiteSpace:"nowrap"}}>
+      {isHead && "★"}{nick}
+    </span>
+  );
+}
+
+/* ─────────────────── Nick chip (colored per person) ─────────────────── */
+const NICK_COLORS = {
+  "บัญชา":    {bg:"#ffd6d6",color:"#7a0000"},
+  "วัฒนะ":    {bg:"#cce5ff",color:"#003d7a"},
+  "ยุรนันท์": {bg:"#d0f5d0",color:"#1a5c00"},
+  "กฤษ":      {bg:"#fff3cc",color:"#7a5500"},
+  "ธราดล":    {bg:"#f0d6ff",color:"#5c0070"},
+  "ธนารักษ์": {bg:"#ccf5ef",color:"#005c4a"},
+  "ธนพรรชน์": {bg:"#ffd6ef",color:"#7a0050"},
+  "กษิดิศ":   {bg:"#dde6ff",color:"#1a2d7a"},
+};
+
+function NickChip({ nick, isHead }) {
+  const c = NICK_COLORS[nick] || {bg:"#e8e8e8",color:"#333"};
+  return (
+    <span style={{
+      display:"inline-flex",alignItems:"center",gap:2,
+      padding:"2px 8px",borderRadius:99,
+      fontSize:11,fontFamily:"Sarabun,sans-serif",fontWeight:isHead?700:600,
+      background:c.bg, color:c.color,
+      border:`1px solid ${c.color}33`,
+      whiteSpace:"nowrap"
+    }}>
+      {isHead&&<span style={{fontSize:9}}>★</span>}{nick}
+    </span>
+  );
+}
+
+function ShiftCells({ nicks }) {
+  if (!nicks || nicks.length === 0)
+    return <span style={{color:"rgba(255,255,255,0.15)",fontSize:11,display:"block",textAlign:"center"}}>—</span>;
+  return (
+    <div style={{display:"flex",flexWrap:"wrap",gap:3,justifyContent:"center"}}>
+      {nicks.map((n,i) => <NickChip key={n+i} nick={n} isHead={i===0} />)}
+    </div>
+  );
+}
+
+
+function EditModal({ entry, onSave, onClose }) {
+  const [form, setForm] = useState({
+    shift0030: [...entry.shift0030],
+    shift0830: [...entry.shift0830],
+    shift1630: [...entry.shift1630],
+    standby:   entry.standby,
+    inspector: entry.inspector,
+    note:      entry.note,
+  });
+  const [activeShift, setActiveShift] = useState("shift1630");
+  const [swapMode,    setSwapMode]    = useState(false);
+  const [swapSel,     setSwapSel]     = useState(null);
+
+  const setShiftPerson = (sk, idx, val) =>
+    setForm(f => { const a=[...f[sk]]; a[idx]=val; return {...f,[sk]:a}; });
+
+  const addPerson = (sk) =>
+    setForm(f => ({...f,[sk]:[...f[sk],""]}));
+
+  const removePerson = (sk, idx) =>
+    setForm(f => ({...f,[sk]:f[sk].filter((_,i)=>i!==idx)}));
+
+  const handleSwap = (sk, idx) => {
+    if (!swapSel) { setSwapSel({sk,idx}); return; }
+    if (swapSel.sk===sk && swapSel.idx===idx) { setSwapSel(null); return; }
+    setForm(f => {
+      const n = {shift0030:[...f.shift0030],shift0830:[...f.shift0830],shift1630:[...f.shift1630]};
+      const tmp = n[swapSel.sk][swapSel.idx];
+      n[swapSel.sk][swapSel.idx] = n[sk][idx];
+      n[sk][idx] = tmp;
+      return {...f,...n};
+    });
+    setSwapSel(null);
+  };
+
+  const isSelected = (sk,idx) => swapSel && swapSel.sk===sk && swapSel.idx===idx;
+
+  return (
+    <div style={{padding:24,fontFamily:"Sarabun,sans-serif"}}>
+      {/* header */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,borderBottom:"2px solid #1a3a6b",paddingBottom:14,flexWrap:"wrap"}}>
+        <div style={{width:44,height:44,borderRadius:"50%",background:"#1a3a6b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <span style={{fontSize:20}}>✏️</span>
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:18,color:"#1a3a6b"}}>แก้ไขตารางเวร</div>
+          <div style={{fontSize:13,color:"#666"}}>วันที่ {entry.day} มีนาคม พ.ศ. 2569</div>
+        </div>
+        <button onClick={()=>{setSwapMode(m=>!m);setSwapSel(null);}} style={{
+          padding:"7px 14px",borderRadius:10,border:"2px solid",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Sarabun,sans-serif",
+          borderColor: swapMode?"#e67e22":"#1a3a6b",
+          background:  swapMode?"#fff3e0":"#eef2ff",
+          color:       swapMode?"#c0392b":"#1a3a6b"}}>
+          🔄 {swapMode?"โหมดสลับเวร (ON)":"โหมดสลับเวร"}
+        </button>
+      </div>
+
+      {/* swap hint */}
+      {swapMode && (
+        <div style={{background:"#fff3e0",border:"1px solid #f0a500",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#7a4400",lineHeight:1.6}}>
+          {swapSel
+            ? <><b>เลือกแล้ว:</b> {form[swapSel.sk][swapSel.idx]} ({SHIFT_LABELS[swapSel.sk]}) — คลิกชื่อที่ต้องการสลับด้วย</>
+            : "คลิกชื่อพนักงานคนแรกที่ต้องการสลับ (สลับข้ามช่วงเวลาได้)"}
+        </div>
+      )}
+
+      {/* shift tabs */}
+      <div style={{display:"flex",gap:6,marginBottom:14}}>
+        {SHIFT_KEYS.map(sk=>(
+          <button key={sk} onClick={()=>setActiveShift(sk)} style={{
+            flex:1,padding:"8px 4px",borderRadius:10,border:"2px solid",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Sarabun,sans-serif",
+            borderColor: activeShift===sk?"#1a3a6b":"#e0e0e0",
+            background:  activeShift===sk?"#1a3a6b":"#f8f9fa",
+            color:       activeShift===sk?"#FFD700":"#555"}}>
+            {SHIFT_SHORT[sk]}
+          </button>
+        ))}
+      </div>
+
+      {/* shift person list */}
+      {SHIFT_KEYS.map(sk => activeShift!==sk ? null : (
+        <div key={sk} style={{marginBottom:8}}>
+          <div style={{fontSize:12,color:"#888",marginBottom:8}}>
+            รายชื่อ {SHIFT_LABELS[sk]}
+            <span style={{marginLeft:8,color:"#1a3a6b",fontWeight:600}}>คนแรก = หัวหน้าเวร ★</span>
+          </div>
+
+          {form[sk].length === 0 && (
+            <div style={{color:"#bbb",fontSize:13,marginBottom:10,padding:"10px",border:"1px dashed #ddd",borderRadius:10,textAlign:"center"}}>
+              — ไม่มีผู้เข้าเวร —
+            </div>
+          )}
+
+          {form[sk].map((nick,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <div style={{width:28,height:28,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+                background: i===0?"#1a3a6b":"#e8f0fb",
+                color: i===0?"#FFD700":"#1a3a6b",fontSize:12,fontWeight:700}}>
+                {i===0?"★":i+1}
+              </div>
+
+              {swapMode ? (
+                <button onClick={()=>handleSwap(sk,i)} style={{
+                  flex:1,padding:"9px 14px",borderRadius:10,border:"2px solid",cursor:"pointer",
+                  fontFamily:"Sarabun,sans-serif",fontWeight:700,fontSize:14,textAlign:"left",
+                  background: isSelected(sk,i)?"#fff3e0":"#f8f9fa",
+                  borderColor: isSelected(sk,i)?"#e67e22":"#c8d8e8",
+                  color: isSelected(sk,i)?"#c0392b":"#1a3a6b"}}>
+                  {nick||"(ว่าง)"} {isSelected(sk,i)&&"🔄"}
+                </button>
+              ) : (
+                <select value={nick} onChange={e=>setShiftPerson(sk,i,e.target.value)} style={{
+                  flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid #ddd",
+                  fontSize:14,fontFamily:"Sarabun,sans-serif",color:"#333"}}>
+                  <option value="">— เลือกพนักงาน —</option>
+                  {EMPLOYEES.map(e=>(
+                    <option key={e.id} value={e.nickname}>{e.nickname} ({e.position})</option>
+                  ))}
+                </select>
+              )}
+
+              {!swapMode && (
+                <button onClick={()=>removePerson(sk,i)} style={{
+                  width:32,height:32,borderRadius:"50%",border:"none",cursor:"pointer",flexShrink:0,
+                  background:"#fee2e2",color:"#dc2626",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+
+          {!swapMode && (
+            <button onClick={()=>addPerson(sk)} style={{
+              width:"100%",padding:"9px",borderRadius:10,border:"2px dashed #b0c8e8",
+              background:"#f0f6ff",color:"#1a3a6b",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"Sarabun,sans-serif"}}>
+              + เพิ่มพนักงานในช่วงนี้
+            </button>
+          )}
+        </div>
+      ))}
+
+      {/* standby / inspector / note */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:18}}>
+        <div>
+          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Standby (00.30-08.30)</label>
+          <select value={form.standby} onChange={e=>setForm(f=>({...f,standby:e.target.value}))} style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #ddd",fontSize:13,fontFamily:"Sarabun,sans-serif"}}>
+            {EMPLOYEES.map(e=><option key={e.id} value={e.nickname}>{e.nickname}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>ผู้ตรวจเวร</label>
+          <select value={form.inspector} onChange={e=>setForm(f=>({...f,inspector:e.target.value}))} style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #ddd",fontSize:13,fontFamily:"Sarabun,sans-serif"}}>
+            {INSPECTORS.map(e=><option key={e.id} value={e.nickname}>{e.nickname}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>หมายเหตุ</label>
+          <select value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} style={{width:"100%",padding:"8px",borderRadius:8,border:"1px solid #ddd",fontSize:13,fontFamily:"Sarabun,sans-serif"}}>
+            {["","เสาร์","อาทิตย์","หยุด"].map(n=><option key={n} value={n}>{n||"— ปกติ —"}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* buttons */}
+      <div style={{display:"flex",gap:10,marginTop:22}}>
+        <button onClick={onClose} style={{flex:1,padding:"12px",borderRadius:12,border:"2px solid #ddd",background:"#f8f9fa",color:"#666",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"Sarabun,sans-serif"}}>
+          ยกเลิก
+        </button>
+        <button onClick={()=>onSave(entry.day,form)} style={{flex:2,padding:"12px",borderRadius:12,border:"none",background:"linear-gradient(90deg,#1a3a6b,#2a5298)",color:"#FFD700",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"Sarabun,sans-serif"}}>
+          ✅ บันทึกการแก้ไข
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Report Modal ─────────────────── */
+function ReportModal({ entry, onClose }) {
+  const [selShift,   setSelShift]   = useState("shift1630");
+  const [selWorkers, setSelWorkers] = useState([ELECTRICAL_WORKERS[3], ELECTRICAL_WORKERS[0]]);
+  const [repDate,    setRepDate]    = useState(fmtDate(entry.day));
+  const [copyStatus, setCopyStatus] = useState("idle"); // idle | success | manual
+
+  const dutyList = entry[selShift] || [];
+
+  // Plain text for clipboard (exact format required)
+  const text = useMemo(() => {
+    const head = getEmp(dutyList[0]);
+    const insp = getInsp(entry.inspector);
+    const lines = [
+      `เรียน ผจก.กฟส.ชยน.ผ่าน หผ.ปร.`,
+      `ลว. ${repDate}         เวลา ${SHIFT_LABELS[selShift]} `,
+      `พนักงานอยู่เวรแก้กระแสไฟฟ้าขัดข้อง ดังนี้ `,
+    ];
+    let n = 1;
+    if (head) { lines.push(`${n}. นาย ${head.fullname} หัวหน้าเวร เบอร์โทรศัพท์  ${head.phone}`); n++; }
+    dutyList.slice(1).forEach(nick => {
+      const e = getEmp(nick);
+      if (e) { lines.push(`${n}. นาย ${e.fullname}   พนักงานเวร `); n++; }
+    });
+    selWorkers.forEach(w => {
+      if (w) { lines.push(`${n}. นาย ${w.fullname} ${w.position} `); n++; }
+    });
+    if (insp) { lines.push(`${n}. นาย ${insp.fullname} ตำแหน่ง ${insp.position} `); n++; }
+    lines.push(`${n}. ระบบสื่อสารเหตุการณ์ทั่วไป ปกติ `); n++;
+    lines.push(`${n}. ไม่มีกระแสไฟฟ้าขัดข้องครับ `); n++;
+    lines.push(`${n}. โทร.043-781048`);
+    return lines.join("\n");
+  }, [entry, selShift, selWorkers, repDate, dutyList]);
+
+  // Rich preview rows
+  const previewRows = useMemo(() => {
+    const head = getEmp(dutyList[0]);
+    const insp = getInsp(entry.inspector);
+    const rows = [];
+    let n = 1;
+    if (head) { rows.push({ n, icon:"👑", text:`นาย ${head.fullname}`, sub:`หัวหน้าเวร  📞 ${head.phone}`, color:"#1a3a6b", bg:"#eef4ff" }); n++; }
+    dutyList.slice(1).forEach(nick => {
+      const e = getEmp(nick);
+      if (e) { rows.push({ n, icon:"👤", text:`นาย ${e.fullname}`, sub:"พนักงานเวร", color:"#2d5a9e", bg:"#f5f8ff" }); n++; }
+    });
+    selWorkers.forEach(w => {
+      if (w) { rows.push({ n, icon:"🔧", text:`นาย ${w.fullname}`, sub:w.position, color:"#1a5c2a", bg:"#f0faf3" }); n++; }
+    });
+    if (insp) { rows.push({ n, icon:"🔍", text:`นาย ${insp.fullname}`, sub:`ตำแหน่ง ${insp.position}`, color:"#7c4a00", bg:"#fffbf0" }); n++; }
+    rows.push({ n, icon:"📡", text:"ระบบสื่อสารเหตุการณ์ทั่วไป ปกติ", sub:"", color:"#555", bg:"#fafafa" }); n++;
+    rows.push({ n, icon:"✅", text:"ไม่มีกระแสไฟฟ้าขัดข้องครับ", sub:"", color:"#166534", bg:"#f0fdf4" }); n++;
+    rows.push({ n, icon:"📞", text:"โทร.043-781048", sub:"", color:"#333", bg:"#fafafa" });
+    return rows;
+  }, [entry, selShift, selWorkers]);
+
+  const textareaRef = useRef(null);
+
+  const handleCopy = () => {
+    if (textareaRef.current) {
+      textareaRef.current.select();
+      textareaRef.current.setSelectionRange(0, 99999);
+      try {
+        const ok = document.execCommand("copy");
+        if (ok) { setCopyStatus("success"); setTimeout(() => setCopyStatus("idle"), 2500); return; }
+      } catch(e) {}
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => { setCopyStatus("success"); setTimeout(() => setCopyStatus("idle"), 2500); })
+        .catch(() => setCopyStatus("manual"));
+    } else {
+      setCopyStatus("manual");
+    }
+  };
+
+  return (
+    <div style={{fontFamily:"Sarabun,sans-serif",overflow:"hidden"}}>
+      {/* ── Modal Header Banner ── */}
+      <div style={{background:"linear-gradient(135deg,#0d2045 0%,#1a3a6b 100%)",padding:"20px 24px 16px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-20,right:-20,width:100,height:100,borderRadius:"50%",background:"rgba(255,215,0,0.08)"}}/>
+        <div style={{position:"absolute",bottom:-30,right:60,width:70,height:70,borderRadius:"50%",background:"rgba(255,215,0,0.05)"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:14,position:"relative"}}>
+          <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(255,215,0,0.15)",border:"2px solid rgba(255,215,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:26}}>⚡</span>
+          </div>
+          <div>
+            <div style={{color:"#FFD700",fontWeight:800,fontSize:18,letterSpacing:0.5}}>รายงานเวร กฟส.ชยน.</div>
+            <div style={{color:"#a0c4ff",fontSize:13,marginTop:2}}>📅 วันที่ {entry.day} มีนาคม พ.ศ. 2569 &nbsp;•&nbsp; 🕐 {SHIFT_LABELS[selShift]}</div>
+          </div>
+          <div style={{marginLeft:"auto",textAlign:"right"}}>
+            <div style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>ผู้ตรวจเวร</div>
+            <div style={{color:"#FFD700",fontWeight:700,fontSize:14}}>{entry.inspector}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:"20px 24px"}}>
+        {/* controls */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          <div>
+            <label style={{fontSize:11,color:"#888",display:"block",marginBottom:4,fontWeight:600}}>📅 วันที่รายงาน</label>
+            <input value={repDate} onChange={e=>setRepDate(e.target.value)}
+              style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #d0dff0",fontSize:14,fontFamily:"Sarabun,sans-serif",boxSizing:"border-box",color:"#1a3a6b",fontWeight:600}} />
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#888",display:"block",marginBottom:4,fontWeight:600}}>🕐 ช่วงเวลาเวร</label>
+            <select value={selShift} onChange={e=>setSelShift(e.target.value)}
+              style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1.5px solid #d0dff0",fontSize:13,fontFamily:"Sarabun,sans-serif",color:"#1a3a6b",fontWeight:600}}>
+              {SHIFT_KEYS.map(k=><option key={k} value={k}>{SHIFT_LABELS[k]}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* electrical workers */}
+        <div style={{marginBottom:18,padding:"12px 14px",borderRadius:12,background:"#f0faf3",border:"1.5px solid #a7d9b2"}}>
+          <label style={{fontSize:11,color:"#1a5c2a",display:"block",marginBottom:8,fontWeight:700}}>🔧 เลือกผู้ปฏิบัติงานระบบไฟฟ้า (เลือก 2 คน)</label>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {ELECTRICAL_WORKERS.map(w=>{
+              const sel=!!selWorkers.find(p=>p.id===w.id);
+              const idx=selWorkers.findIndex(p=>p.id===w.id);
+              return (
+                <button key={w.id} onClick={()=>setSelWorkers(prev=>{
+                  if(prev.find(p=>p.id===w.id)) return prev.filter(p=>p.id!==w.id);
+                  if(prev.length>=2) return [prev[1],w];
+                  return [...prev,w];
+                })} style={{padding:"5px 12px",borderRadius:99,fontSize:12,border:"1.5px solid",cursor:"pointer",fontFamily:"Sarabun,sans-serif",fontWeight:600,
+                  background:sel?"#1a5c2a":"white",color:sel?"white":"#333",borderColor:sel?"#1a5c2a":"#c0d8c0",
+                  display:"flex",alignItems:"center",gap:4}}>
+                  {sel&&<span style={{fontSize:10,background:"rgba(255,255,255,0.3)",borderRadius:"50%",width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{idx+1}</span>}
+                  {w.fullname.split(" ")[0]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* preview */}
+        <div style={{borderRadius:14,border:"2px solid #1a3a6b",overflow:"hidden",marginBottom:18,boxShadow:"0 4px 20px rgba(26,58,107,0.12)"}}>
+          <div style={{background:"#f5f8ff",borderBottom:"2px solid #1a3a6b",padding:"12px 16px"}}>
+            <div style={{fontWeight:700,fontSize:14,color:"#1a3a6b",lineHeight:1.7}}>เรียน ผจก.กฟส.ชยน.ผ่าน หผ.ปร.</div>
+            <div style={{fontSize:13,color:"#444",lineHeight:1.7}}>ลว. <b>{repDate}</b> &nbsp;&nbsp;&nbsp; เวลา <b>{SHIFT_LABELS[selShift]}</b></div>
+            <div style={{fontSize:13,color:"#1a3a6b",fontWeight:600,marginTop:2}}>⚡ พนักงานอยู่เวรแก้กระแสไฟฟ้าขัดข้อง ดังนี้</div>
+          </div>
+          <div style={{background:"white"}}>
+            {previewRows.map((row,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 16px",
+                background:i%2===0?row.bg:"white",
+                borderBottom:i<previewRows.length-1?"1px solid #eef2f8":"none"}}>
+                <div style={{width:26,height:26,borderRadius:"50%",background:row.bg,border:`1.5px solid ${row.color}33`,
+                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,fontSize:14}}>
+                  {row.icon}
+                </div>
+                <div style={{display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap",flex:1}}>
+                  <span style={{fontWeight:700,color:"#333",fontSize:13,minWidth:20}}>{row.n}.</span>
+                  <span style={{color:row.color,fontSize:13,fontWeight:600}}>{row.text}</span>
+                  {row.sub&&<span style={{color:"#666",fontSize:12,background:"#f0f4ff",borderRadius:6,padding:"1px 7px"}}>{row.sub}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* hidden textarea for execCommand copy */}
+        <textarea
+          ref={textareaRef}
+          readOnly
+          value={text}
+          style={{position:"absolute",left:-9999,top:-9999,opacity:0,pointerEvents:"none",width:1,height:1}}
+        />
+
+        {/* copy button */}
+        <button onClick={handleCopy}
+          style={{width:"100%",padding:"14px",borderRadius:12,border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"Sarabun,sans-serif",
+            transition:"all 0.2s",
+            background:copyStatus==="success"?"linear-gradient(90deg,#16a34a,#15803d)":"linear-gradient(90deg,#1a3a6b,#2a5298)",
+            color:copyStatus==="success"?"white":"#FFD700",
+            boxShadow:copyStatus==="success"?"0 4px 14px rgba(22,163,74,0.4)":"0 4px 14px rgba(26,58,107,0.35)",
+            marginBottom: copyStatus==="manual" ? 10 : 0}}>
+          {copyStatus==="success"?"✅ คัดลอกสำเร็จแล้ว!":"📋 คัดลอกรายงานเวร"}
+        </button>
+
+        {/* fallback: visible textarea for manual copy */}
+        {copyStatus==="manual" && (
+          <div style={{borderRadius:12,border:"2px solid #f0a500",overflow:"hidden"}}>
+            <div style={{background:"#1a3a6b",padding:"9px 14px",display:"flex",alignItems:"center",gap:8}}>
+              <span>📋</span>
+              <span style={{color:"#FFD700",fontWeight:700,fontSize:12}}>กด Ctrl+A แล้ว Ctrl+C เพื่อคัดลอก</span>
+              <button onClick={()=>setCopyStatus("idle")} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",color:"white",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontSize:12}}>✕</button>
+            </div>
+            <textarea
+              readOnly
+              value={text}
+              onClick={e=>{ e.target.select(); e.target.setSelectionRange(0,99999); }}
+              style={{width:"100%",padding:"14px",border:"none",fontSize:13,fontFamily:"Sarabun,sans-serif",lineHeight:2,resize:"none",outline:"none",boxSizing:"border-box",color:"#1a2a4a",minHeight:200,display:"block"}}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Main App ─────────────────── */
+function App() {
+  const [schedule,    setSchedule]    = useState(INITIAL_SCHEDULE);
+  const [view,        setView]        = useState("schedule");
+  const [shiftView,   setShiftView]   = useState("shift1630");
+  const [editEntry,   setEditEntry]   = useState(null);
+  const [reportEntry, setReportEntry] = useState(null);
+  const [changes,     setChanges]     = useState({});
+
+  const today = new Date();
+  const isThisMonth = today.getFullYear()===2026 && today.getMonth()===2;
+  const todayDay    = isThisMonth ? today.getDate() : null;
+  const todayEntry  = schedule.find(s=>s.day===todayDay);
+
+  const handleSave = useCallback((day, form) => {
+    setSchedule(prev => prev.map(e => e.day===day ? {...e,...form} : e));
+    setChanges(c => ({...c,[day]:true}));
+    setEditEntry(null);
+  }, []);
+
+  const resetDay = (day) => {
+    const orig = INITIAL_SCHEDULE.find(e=>e.day===day);
+    setSchedule(prev => prev.map(e => e.day===day ? {...orig} : e));
+    setChanges(c => { const n={...c}; delete n[day]; return n; });
+  };
+
+  const changedCount = Object.keys(changes).length;
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0a1628 0%,#1a2e5a 55%,#0e2044 100%)",fontFamily:"Sarabun,sans-serif"}}>
+
+      {/* ── Header ── */}
+      <div style={{background:"linear-gradient(90deg,#0d2045,#1a3a6b)",borderBottom:"2px solid #FFD700"}}>
+        <div style={{maxWidth:980,margin:"0 auto",padding:"14px 16px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <div style={{width:48,height:48,borderRadius:"50%",background:"#FFD700",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:24}}>⚡</div>
+          <div style={{flex:1,minWidth:160}}>
+            <div style={{color:"#FFD700",fontWeight:800,fontSize:17,letterSpacing:0.5}}>ระบบจัดการตารางเวร</div>
+            <div style={{color:"#a0c4ff",fontSize:12}}>แก้กระแสไฟฟ้าขัดข้อง • กฟส.ชยน. • มีนาคม 2569</div>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {[{k:"schedule",l:"ตารางเวร",ic:"📅"},{k:"employees",l:"พนักงาน",ic:"👥"},{k:"report",l:"รายงาน",ic:"📋"}].map(t=>(
+              <button key={t.k} onClick={()=>setView(t.k)} style={{
+                padding:"8px 14px",borderRadius:10,border:"none",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Sarabun,sans-serif",
+                background: view===t.k?"#FFD700":"rgba(255,255,255,0.1)",
+                color:      view===t.k?"#0d2045":"#a0c4ff"}}>
+                {t.ic} {t.l}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{maxWidth:980,margin:"0 auto",padding:"20px 16px"}}>
+
+        {/* today banner */}
+        {view==="schedule" && todayEntry && (
+          <div style={{background:"linear-gradient(90deg,#FFD700,#ffc107)",borderRadius:16,padding:"13px 18px",marginBottom:18,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",boxShadow:"0 4px 24px rgba(255,200,0,0.3)"}}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{fontWeight:700,fontSize:15,color:"#0d2045"}}>⚡ เวรวันนี้ — วันที่ {todayDay} มีนาคม 2569</div>
+              <div style={{fontSize:13,color:"#1a3a6b",marginTop:2}}>
+                16.30-00.30: {todayEntry.shift1630.join(", ")} &nbsp;•&nbsp; Standby: {todayEntry.standby} &nbsp;•&nbsp; ผู้ตรวจ: {todayEntry.inspector}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setEditEntry({...todayEntry})} style={{padding:"8px 16px",borderRadius:10,border:"2px solid #0d2045",background:"#0d2045",color:"#FFD700",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"Sarabun,sans-serif"}}>✏️ แก้ไข</button>
+              <button onClick={()=>setReportEntry(todayEntry)}    style={{padding:"8px 16px",borderRadius:10,border:"2px solid #0d2045",background:"white",  color:"#0d2045",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"Sarabun,sans-serif"}}>📋 รายงาน</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Schedule View ── */}
+        {view==="schedule" && (
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+              <div style={{color:"white",fontWeight:700,fontSize:16}}>📅 ตารางเวร มีนาคม 2569</div>
+              {changedCount>0 && (
+                <span style={{background:"rgba(255,165,0,0.25)",color:"#ffa500",borderRadius:8,padding:"2px 10px",fontSize:12,border:"1px solid rgba(255,165,0,0.4)"}}>
+                  ✏️ แก้ไขแล้ว {changedCount} วัน
+                </span>
+              )}
+            </div>
+
+            {/* color legend */}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+              {[
+                {nick:"บัญชา",    color:"#ffd6d6"},
+                {nick:"วัฒนะ",    color:"#d6eaff"},
+                {nick:"ยุรนันท์", color:"#d6ffd6"},
+                {nick:"กฤษ",      color:"#fff3d6"},
+                {nick:"ธราดล",    color:"#f0d6ff"},
+                {nick:"ธนารักษ์", color:"#d6fff6"},
+                {nick:"ธนพรรชน์", color:"#ffd6f0"},
+                {nick:"กษิดิศ",   color:"#e0e8ff"},
+              ].map(e=>(
+                <span key={e.nick} style={{padding:"3px 10px",borderRadius:99,fontSize:11,fontFamily:"Sarabun,sans-serif",fontWeight:600,background:e.color,color:"#222",border:"1px solid rgba(0,0,0,0.12)"}}>
+                  {e.nick}
+                </span>
+              ))}
+            </div>
+
+            <div style={{overflowX:"auto",borderRadius:16,border:"1px solid rgba(255,255,255,0.1)"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
+                <thead>
+                  <tr style={{background:"rgba(20,45,100,0.98)"}}>
+                    <th style={{padding:"10px 8px",color:"#FFD700",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",width:42}}>วันที่</th>
+                    <th style={{padding:"10px 8px",color:"#a0d4ff",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>00.30 – 08.30</th>
+                    <th style={{padding:"10px 8px",color:"#a0ffa0",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>08.30 – 16.30</th>
+                    <th style={{padding:"10px 8px",color:"#ffd6a0",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>16.30 – 00.30</th>
+                    <th style={{padding:"10px 8px",color:"#d0c4ff",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>Standby<br/><span style={{fontSize:10,opacity:0.7}}>(00.30-08.30)</span></th>
+                    <th style={{padding:"10px 8px",color:"#FFD700",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>หมายเหตุ</th>
+                    <th style={{padding:"10px 8px",color:"#FFD700",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>ผู้ตรวจเวร</th>
+                    <th style={{padding:"10px 8px",color:"#FFD700",fontFamily:"Sarabun,sans-serif",fontSize:12,textAlign:"center",whiteSpace:"nowrap",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {schedule.map((entry, idx) => {
+                    const isToday   = entry.day===todayDay;
+                    const isWeekend = ["เสาร์","อาทิตย์","หยุด"].includes(entry.note);
+                    const isChanged = !!changes[entry.day];
+                    const rowBg = isToday
+                      ? "rgba(255,215,0,0.13)"
+                      : isWeekend
+                        ? "rgba(255,255,255,0.04)"
+                        : idx%2===0 ? "rgba(255,255,255,0.02)" : "transparent";
+                    return (
+                      <tr key={entry.day} style={{background:rowBg, borderBottom:"1px solid rgba(255,255,255,0.06)", transition:"background 0.15s"}}>
+
+                        {/* วันที่ */}
+                        <td style={{padding:"7px 6px",textAlign:"center",fontWeight:700,fontSize:13,
+                          color: isToday?"#FFD700": isWeekend?"#ffa07a":"#a0c4ff",
+                          borderRight:"1px solid rgba(255,255,255,0.06)",whiteSpace:"nowrap"}}>
+                          {isToday&&<span style={{fontSize:9}}>⚡</span>}{entry.day}
+                          {isChanged&&<span style={{display:"block",color:"#ffa500",fontSize:8,lineHeight:1}}>●แก้</span>}
+                        </td>
+
+                        {/* กะ 00.30-08.30 */}
+                        <td style={{padding:"6px 8px",borderLeft:"1px solid rgba(255,255,255,0.06)"}}>
+                          <ShiftCells nicks={entry.shift0030} />
+                        </td>
+
+                        {/* กะ 08.30-16.30 */}
+                        <td style={{padding:"6px 8px",borderLeft:"1px solid rgba(255,255,255,0.06)"}}>
+                          <ShiftCells nicks={entry.shift0830} />
+                        </td>
+
+                        {/* กะ 16.30-00.30 */}
+                        <td style={{padding:"6px 8px",borderLeft:"1px solid rgba(255,255,255,0.06)"}}>
+                          <ShiftCells nicks={entry.shift1630} />
+                        </td>
+
+                        {/* Standby */}
+                        <td style={{padding:"6px 8px",textAlign:"center",borderLeft:"1px solid rgba(255,255,255,0.06)"}}>
+                          {entry.standby ? <NickChip nick={entry.standby} /> : <span style={{color:"rgba(255,255,255,0.15)",fontSize:11}}>—</span>}
+                        </td>
+
+                        {/* หมายเหตุ */}
+                        <td style={{padding:"6px 8px",textAlign:"center",borderLeft:"1px solid rgba(255,255,255,0.06)"}}>
+                          {isWeekend
+                            ? <span style={{background:"rgba(255,100,50,0.25)",color:"#ffaa80",borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:600}}>{entry.note}</span>
+                            : <span style={{color:"rgba(255,255,255,0.12)",fontSize:11}}>—</span>}
+                        </td>
+
+                        {/* ผู้ตรวจ */}
+                        <td style={{padding:"6px 8px",textAlign:"center",borderLeft:"1px solid rgba(255,255,255,0.06)"}}>
+                          <span style={{color: entry.inspector==="ธงชัย"?"#a0d4ff":"#ffd6a0", fontSize:12, fontFamily:"Sarabun,sans-serif",fontWeight:600}}>{entry.inspector}</span>
+                        </td>
+
+                        {/* จัดการ */}
+                        <td style={{padding:"6px 6px",textAlign:"center",borderLeft:"1px solid rgba(255,255,255,0.06)"}}>
+                          <div style={{display:"flex",gap:3,justifyContent:"center"}}>
+                            <button onClick={()=>setEditEntry({...entry})} title="แก้ไข / สลับเวร" style={{padding:"4px 7px",borderRadius:7,border:"1px solid rgba(100,160,255,0.3)",background:"rgba(100,160,255,0.1)",color:"#6dd5fa",fontSize:12,cursor:"pointer"}}>✏️</button>
+                            <button onClick={()=>setReportEntry(entry)}     title="ออกรายงาน"     style={{padding:"4px 7px",borderRadius:7,border:"1px solid rgba(255,215,0,0.25)",background:"rgba(255,215,0,0.08)",color:"#FFD700",fontSize:12,cursor:"pointer"}}>📋</button>
+                            {isChanged&&(
+                              <button onClick={()=>resetDay(entry.day)} title="คืนค่าเดิม" style={{padding:"4px 7px",borderRadius:7,border:"1px solid rgba(255,100,100,0.3)",background:"rgba(255,100,100,0.08)",color:"#f87171",fontSize:12,cursor:"pointer"}}>↩️</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{marginTop:10,fontSize:11,color:"rgba(255,255,255,0.3)",textAlign:"right"}}>
+              ★ = หัวหน้าเวร &nbsp;|&nbsp; ● = แก้ไขแล้ว &nbsp;|&nbsp; ↩️ = คืนค่าเดิม
+            </div>
+          </div>
+        )}
+
+        {/* ── Employees View ── */}
+        {view==="employees" && (
+          <div>
+            <div style={{color:"white",fontWeight:700,fontSize:16,marginBottom:16}}>👥 รายชื่อพนักงาน</div>
+            {[
+              {title:"⚡ พนักงานเข้าเวร",          list:EMPLOYEES,          bg:"#1a3a6b",ac:"#FFD700",  sub:e=>`${e.position} • ${e.role}`, ph:true},
+              {title:"🔍 ผู้ตรวจเวร",              list:INSPECTORS,         bg:"#4a3000",ac:"#FFD700",  sub:e=>e.position,                  ph:true},
+              {title:"🔧 ผู้ปฏิบัติงานระบบไฟฟ้า", list:ELECTRICAL_WORKERS, bg:"#1a4a2a",ac:"#7fff7f",  sub:e=>e.position,                  ph:false},
+            ].map(sec=>(
+              <div key={sec.title} style={{marginBottom:24}}>
+                <div style={{color:"#FFD700",fontWeight:700,fontSize:14,marginBottom:10}}>{sec.title}</div>
+                <div style={{display:"grid",gap:10,gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))"}}>
+                  {sec.list.map(emp=>(
+                    <div key={emp.id} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{width:44,height:44,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:`linear-gradient(135deg,${sec.bg},${sec.bg}bb)`,border:`2px solid ${sec.ac}33`}}>
+                        <span style={{color:sec.ac,fontWeight:700,fontSize:15}}>{(emp.nickname||emp.fullname)[0]}</span>
+                      </div>
+                      <div>
+                        <div style={{color:"white",fontWeight:700,fontSize:14,fontFamily:"Sarabun,sans-serif"}}>{emp.fullname||emp.nickname}</div>
+                        <div style={{color:"#a0c4ff",fontSize:12}}>{sec.sub(emp)}</div>
+                        {sec.ph&&emp.phone&&<div style={{color:"#6dd5fa",fontSize:12}}>📞 {emp.phone}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Report Picker ── */}
+        {view==="report" && (
+          <div>
+            <div style={{color:"white",fontWeight:700,fontSize:16,marginBottom:16}}>📋 เลือกวันที่ต้องการออกรายงาน</div>
+            <div style={{display:"grid",gap:8,gridTemplateColumns:"repeat(auto-fill,minmax(105px,1fr))"}}>
+              {schedule.map(entry=>(
+                <button key={entry.day} onClick={()=>setReportEntry(entry)} style={{
+                  borderRadius:14,padding:"12px 8px",textAlign:"center",cursor:"pointer",
+                  fontFamily:"Sarabun,sans-serif",
+                  background:"rgba(255,255,255,0.05)",
+                  border: entry.day===todayDay?"2px solid #FFD700":"1px solid rgba(255,255,255,0.1)",
+                  color:  entry.day===todayDay?"#FFD700":"#a0c4ff"}}>
+                  <div style={{fontWeight:700,fontSize:22}}>{entry.day}</div>
+                  <div style={{fontSize:11,opacity:0.55}}>มี.ค. 2569</div>
+                  {entry.note&&<div style={{fontSize:10,color:"rgba(255,215,0,0.8)",marginTop:2}}>{entry.note}</div>}
+                  <div style={{marginTop:4}}>
+                    {entry.shift1630[0]
+                      ? <NickBadge nick={entry.shift1630[0]} isHead small/>
+                      : <span style={{fontSize:10,color:"#555"}}>—</span>}
+                  </div>
+                  {changes[entry.day]&&<div style={{fontSize:9,color:"#ffa500",marginTop:3}}>● แก้ไขแล้ว</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* footer */}
+      <div style={{textAlign:"center",color:"rgba(255,255,255,0.22)",fontSize:12,padding:"20px 0 14px",fontFamily:"Sarabun,sans-serif"}}>
+        ระบบจัดการตารางเวรแก้กระแสไฟฟ้าขัดข้อง • การไฟฟ้าส่วนภูมิภาค สาขา ชยน.
+      </div>
+
+      {/* modals */}
+      {editEntry && (
+        <Overlay onClose={()=>setEditEntry(null)}>
+          <EditModal entry={editEntry} onSave={handleSave} onClose={()=>setEditEntry(null)} />
+        </Overlay>
+      )}
+      {reportEntry && (
+        <Overlay onClose={()=>setReportEntry(null)}>
+          <ReportModal entry={reportEntry} onClose={()=>setReportEntry(null)} />
+        </Overlay>
+      )}
+    </div>
+  );
+}
+
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
+</body>
+</html>
